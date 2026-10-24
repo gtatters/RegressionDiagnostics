@@ -43,6 +43,26 @@ draw.data <- function(type) {
 }
 
 # ---------------------------
+# Safari-safe plotting
+# Draws a base-R plot as a PNG image. Stand-in for renderPlot(), which
+# currently fails in Safari under Shinylive. Use with imageOutput().
+# ---------------------------
+render_base <- function(id, session, draw) {
+  renderImage({
+    cd <- session$clientData
+    w  <- cd[[paste0("output_", id, "_width")]]
+    h  <- cd[[paste0("output_", id, "_height")]]
+    req(w > 0, h > 0)
+    pr <- cd$pixelratio
+    if (is.null(pr)) pr <- 1
+    f <- tempfile(fileext = ".png")
+    png(f, width = w * pr, height = h * pr, res = 72 * pr)
+    tryCatch(draw(), finally = dev.off())
+    list(src = f, contentType = "image/png", width = w, height = h)
+  }, deleteFile = TRUE)
+}
+
+# ---------------------------
 # UI
 # ---------------------------
 ui <- pageWithSidebar(
@@ -84,17 +104,17 @@ ui <- pageWithSidebar(
   ),
   
   mainPanel(
-    plotOutput("scatter"),
+    imageOutput("scatter", height = "400px"),
     br(),
     br(),
-    plotOutput("residuals")
+    imageOutput("residuals", height = "280px")
   )
 )
 
 # ---------------------------
 # SERVER
 # ---------------------------
-server <- function(input, output) {
+server <- function(input, output, session) {
   
   mydata <- reactive({
     input$resample        # dependency trigger
@@ -108,7 +128,7 @@ server <- function(input, output) {
   # ---------------------------
   # Scatter plot with regression line, CI, PI, optional residuals
   # ---------------------------
-  output$scatter <- renderPlot({
+  output$scatter <- render_base("scatter", session, function() {
     
     data1 <- mydata()
     x     <- data1$x
@@ -169,7 +189,7 @@ server <- function(input, output) {
   # ---------------------------
   # Diagnostic plots: residuals vs fitted, histogram, Q-Q
   # ---------------------------
-  output$residuals <- renderPlot({
+  output$residuals <- render_base("residuals", session, function() {
     
     residuals <- summary(lmResults())$residuals
     predicted <- predict(lmResults(), newdata = data.frame(x = mydata()$x))
@@ -197,7 +217,7 @@ server <- function(input, output) {
            main = "Normal Q-Q Plot of Residuals")
     qqline(residuals, col = "#569BBD", lwd = 2)
     
-  }, height = 280)
+  })
 }
 
 shinyApp(ui = ui, server = server)
