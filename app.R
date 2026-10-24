@@ -54,7 +54,7 @@ render_base <- function(id, session, draw) {
     h  <- cd[[paste0("output_", id, "_height")]]
     req(w > 0, h > 0)
     pr <- cd$pixelratio
-    if (is.null(pr)) pr <- 1
+    pr <- 1   # TEST: draw at standard resolution to keep images small
     f <- tempfile(fileext = ".png")
     png(f, width = w * pr, height = h * pr, res = 72 * pr)
     tryCatch(draw(), finally = dev.off())
@@ -70,6 +70,11 @@ ui <- pageWithSidebar(
   headerPanel("Diagnostics for Simple Linear Regression"),
   
   sidebarPanel(
+    # Grey out Resample while R is still drawing, so clicks can't pile up
+    # (rapid updates crash Safari under Shinylive)
+    tags$head(tags$style(HTML(
+      "html.shiny-busy .action-button { pointer-events: none; opacity: 0.5; }"
+    ))),
     
     radioButtons("type", "Select a trend:",
                  list("Linear up"    = "linear.up",
